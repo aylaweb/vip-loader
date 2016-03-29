@@ -1,0 +1,145 @@
+<!--
+Copyright (c) 2016 The Ayla Project Authors.
+This code may only be used under the MIT style license found at http://aylaweb.github.io/LICENSE.txt
+The complete set of authors may be found at http://aylaweb.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://aylaweb.github.io/CONTRIBUTORS.txt
+-->
+
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../vip-app/vip-app.html">
+
+<script>
+    Polymer({
+        is: 'vip-loader',
+        properties: {
+            app: {
+                type: Object,
+                observer: '_appChanged'
+            },
+            appName: {
+                type: String,
+                value: "",
+                observer: '_appLoadChanged'
+            },
+            appContainer: {
+                type: String,
+                value: "",
+                observer: '_appLoadChanged'
+            }
+        },
+        created: function () {
+            console.log(this.id + " -> vip-loader -> -> Event created");
+        },
+        attached: function () {
+            console.log(this.id + " -> vip-loader -> -> Event attached");
+        },
+        ready: function () {
+            console.log(this.id + " -> vip-loader -> -> Event ready");
+            this.async(this._innerRule.bind(this));
+        },
+        _innerRule: function () {
+            var ruleLoadAppName = {};
+            ruleLoadAppName.when = "main.onevent-loadapp";
+            ruleLoadAppName.then = "app";
+            this.rules = this.rules || [];
+            this.push('rules', ruleLoadAppName);
+        },
+        appLoad: function (appConfig) {
+            Polymer.Base.create('vip-app', appConfig);
+        },
+        detached: function () {
+            console.log(this.id + " -> vip-loader -> -> Event detached");
+        },
+        loadApp: function () {
+
+        },
+        _appsLoadConfigChanged: function (changeRecord) {
+            if (changeRecord) {
+                changeRecord.indexSplices.forEach(function (s) {
+                    s.object.forEach(function (appConfig) {
+                        if (!sessionStorage.getItem(appConfig.appId + '$' + appConfig.appId))
+                        {
+                            if (appConfig.url) {
+                                this._getURLConfig(appConfig.url);
+                            }
+                            else {
+                                this._loadConfig(appConfig.json)
+                            }
+                        }
+                    }, this);
+                }, this);
+            }
+        },
+        _getURLConfig: function (url) {
+            this.$.request.url = url;
+            this.$.request.generateRequest();
+        },
+        _onErrorHandler: function (e) {
+            console.log("Error de carga de configuracion");
+        },
+        _onLoadHandler: function (e) {
+            // Loads config from JSON
+            var appConfig = e.detail.response;
+            this._loadConfig(appConfig);
+        },
+        _loadConfig: function (appConfig) {
+            // convert an object into an array
+            var appArrayConfig = Object.keys(appConfig).map(function (k) {
+                return {key: k, value: appConfig[k]};
+            })
+            var elems = Object.keys(appConfig);
+            // find elem with app config
+            var appElem = _.find(appArrayConfig, function (obj) {
+                return obj.value.etype == 'vip-app';
+            });
+            if (appElem)
+            {
+                var appId = appElem.key;
+                for (var elemName in appConfig)
+                {
+                    var appLoadConfig = _.findWhere(this.appsLoadConfig, {appId: appId});
+                    if (appLoadConfig.container)
+                        appConfig[elemName].container = appLoadConfig.container;
+                    appConfig[elemName].appId = appId;
+                    appConfig[elemName].id = elemName;
+                    sessionStorage.setItem(appId + "$" + elemName, JSON.stringify(appConfig[elemName]));
+                    if (appLoadConfig.loadServer)
+                        this.fire('elemconfig', appConfig[elemName]);
+                }
+                sessionStorage.setItem('elemId', appId);
+                sessionStorage.setItem('appId', appId);
+                sessionStorage.setItem('elemEtype', 'vip-app');
+                sessionStorage.setItem("vipapp", elems);
+                var app = document.createElement('vip-app');
+                // window.history.pushState("object or string", "Title", app.selected || appName);
+            }
+        },
+        _getJsonFromUrl: function (query) {
+            var result = {};
+            query.split("&").forEach(function (part) {
+                var item = part.split("=");
+                result[item[0]] = decodeURIComponent(item[1]);
+            });
+            return result;
+        },
+        load: function (url, json, loadServer, doLoad, container) {
+            if ((!loadServer) || doLoad) {
+                if (url)
+                {
+                    var urlObject = new URL(url);
+                    var appId = urlObject.pathname.split('/').pop().split('.').reverse().pop();
+                    var appLoadConfig = {appId: appId, url: url, loadServer: loadServer, container: container};
+                    this.push('appsLoadConfig', appLoadConfig);
+                }
+                else {
+                    var appElem = _.find(json, function (obj) {
+                        return obj.etype == 'vip-app';
+                    });
+                    var appId = appElem.id;
+                    var appLoadConfig = {appId: appId, json: json, loadServer: loadServer, container: container};
+                    this.push('appsLoadConfig', appLoadConfig);
+                }
+            }
+        }
+    });
+</script>
